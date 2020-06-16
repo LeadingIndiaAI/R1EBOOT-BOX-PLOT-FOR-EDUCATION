@@ -1,0 +1,119 @@
+import sys
+import sklearn
+import numpy as np
+import zipfile
+import pandas as pd
+import matplotlib as plt
+from sklearn.preprocessing import LabelEncoder,OneHotEncoder
+import urllib.request
+trainUrl = 'https://s3.amazonaws.com/drivendata-prod/data/4/public/81e8f2de-9915-4934-b9ae-9705685c9d50.csv'
+testUrl = "https://s3.amazonaws.com/drivendata-prod/data/4/public/d0fcd6d3-5bc5-4869-b4e6-d12ecb2ff517.csv"
+with urllib.request.urlopen(trainUrl) as dl_file:
+  train = pd.read_csv(dl_file)
+with urllib.request.urlopen(testUrl) as dl_file:
+  test = pd.read_csv(dl_file)
+training_data = train[['Facility_or_Department', 'Function_Description','Fund_Description',
+                       'Job_Title_Description', 'Location_Description','Object_Description',
+                       'Position_Extra', 'Program_Description', 'SubFund_Description',
+                       'Sub_Object_Description', 'Text_1', 'Text_2','Text_3','Text_4', 'Total','FTE']]
+
+labels = (train[['Function','Object_Type','Operating_Status','Position_Type','Pre_K', 'Reporting',
+                'Sharing','Student_Type', 'Use']])
+
+test_data = test[['Facility_or_Department', 'Function_Description','Fund_Description',
+                       'Job_Title_Description', 'Location_Description','Object_Description',
+                       'Position_Extra', 'Program_Description', 'SubFund_Description',
+                       'Sub_Object_Description', 'Text_1', 'Text_2','Text_3','Text_4', 'Total','FTE']]
+labels_fields=['Function','Object_Type','Operating_Status','Position_Type','Pre_K', 'Reporting',
+                'Sharing','Student_Type', 'Use']
+training_data=training_data.drop(['Total'],axis=1)
+training_data=training_data.drop(['FTE'],axis=1)
+
+test_data=test_data.drop(['Total'], axis = 1)
+test_data=test_data.drop(['FTE'], axis = 1)
+for i in range(training_data.shape[1]):
+    labelencoder_X=LabelEncoder();
+    # type(training_data.iloc[:,i])
+    training_data.iloc[:,i] = training_data.iloc[:,i].astype(str)
+    training_data.iloc[:,i] = training_data.iloc[:,i].str.replace('[^\w\s]','')
+    training_data.iloc[:,i] = labelencoder_X.fit_transform(training_data.iloc[:,i])
+
+for i in range(labels.shape[1]):
+    labelencoder_X=LabelEncoder();
+    labels.iloc[:,i] = labels.iloc[:,i].astype(str)
+    labels.iloc[:,i] = labels.iloc[:,i].str.replace('[^\w\s]','')
+    labels.iloc[:,i] = labelencoder_X.fit_transform(labels.iloc[:,i])
+
+for i in range(test_data.shape[1]):
+    labelencoder_X=LabelEncoder();
+    test_data.iloc[:,i] = test_data.iloc[:,i].astype(str)
+    test_data.iloc[:,i] = test_data.iloc[:,i].str.replace('[^\w\s]','')
+    test_data.iloc[:,i] = labelencoder_X.fit_transform(test_data.iloc[:,i])
+
+with urllib.request.urlopen(testUrl) as dl_file:
+  test1 = pd.read_csv(dl_file)
+test = test.rename(columns={'Unnamed: 0': 'Identification_number'})
+test_data1 = test[['Identification_number','Facility_or_Department', 'Function_Description','Fund_Description',
+                       'Job_Title_Description', 'Location_Description','Object_Description',
+                       'Position_Extra', 'Program_Description', 'SubFund_Description',
+                       'Sub_Object_Description', 'Text_1', 'Text_2','Text_3','Text_4', 'Total','FTE']]
+labels1 = (train[['Function','Object_Type','Operating_Status','Position_Type','Pre_K', 'Reporting',
+                'Sharing','Student_Type', 'Use']])
+test_data_pred=test_data1.iloc[:,0].values
+output_fields=['']
+for i in range(9):
+  y=labels1.iloc[:,i].values
+  unique=np.unique(y)
+  print(np.shape(unique))
+  str=labels_fields[i]
+  for i in unique:
+    output_fields.append(str+'_'+i)
+print(output_fields)
+print(len(output_fields)) 
+test_data_pred.resize((50064,1))
+np.shape(test_data_pred)
+import keras
+from keras.models import Sequential#to initialise our NN
+from keras.layers import Dense#to build layers of our ANN
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+acc=[]
+# test_data_pred=np.reshape(50064,1)
+prob=[]
+for i in range(0,9):
+    x=training_data.iloc[:,0:14].values
+    y=labels.iloc[:,i].values
+    p=np.unique(y)
+    # y=np.reshape(y,(400277,1))
+    X_train,X_test,y_train,y_test=train_test_split(x,y,test_size=0.3,random_state=0)
+    sc=StandardScaler()
+    X_train=sc.fit_transform(X_train)
+    X_test=sc.transform(X_test)
+    classifier = Sequential()
+    classifier.add(Dense(units = 14,kernel_initializer = 'uniform', activation = 'relu', input_dim=14))
+    classifier.add(Dense(units = 9+len(p), kernel_initializer = 'uniform', activation = 'relu'))
+    classifier.add(Dense(units = 9+len(p), kernel_initializer = 'uniform', activation = 'relu'))
+    classifier.add(Dense(units = len(p), kernel_initializer = 'uniform', activation = 'softmax'))#if categorical data then see video for activation 
+    classifier.compile(optimizer = 'adam', loss = 'sparse_categorical_crossentropy', metrics = ['accuracy'])#if categorical data then see video for loss funtion
+    classifier.fit(X_train, y_train,validation_split=0.2,batch_size = 1024, epochs = 200)
+    y_pred = np.array(classifier.predict(test_data))
+    test_data_pred=np.concatenate((test_data_pred,y_pred),axis=1)
+    score = classifier.evaluate(X_test, y_test, verbose=0)
+    print('Test loss:', score[0])
+    print('Test accuracy:', score[1])
+    
+    
+    import csv
+# name of csv file  
+filename = "submission2.csv"
+    
+# writing to csv file  
+with open(filename, 'w') as csvfile:  
+    # creating a csv writer object  
+    csvwriter = csv.writer(csvfile)  
+        
+    # writing the fields  
+    csvwriter.writerow(output_fields)  
+        
+    # writing the data rows  
+    csvwriter.writerows(test_data_pred)
