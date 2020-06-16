@@ -28,8 +28,11 @@ The metric used for this competition is affectionately named 'multi-multi'. In t
 
 
 
-Team 
+Team members
 1.Khushboo Paddiyar
+
 2.S.GopiChand
+
 3.Ch.Sai Poorna Chandu
+
 4.N.Sandeep                       
